@@ -1,0 +1,30 @@
+model:
+  model_type: 'reward'
+  device: 'cuda:0'
+  input_dim: 1
+  hidden_dim: 256
+  target_input_encoder: 'mlp'
+  # DPL
+  is_conditional: False
+  distributional_head: True
+loss:
+  beta_kl: None
+training:
+  num_epochs: 3
+  lr: 1e-4
+  seed: 0
+  dry_run: False
+data:
+  min_num_context: 0
+  max_num_context: 10
+  num_targets: 20
+  batch_size: 64
+  context_datatype: 'raw'
+  target_datatype: 'raw'
+  path_to_context_data: 'data/synthetic_data/raw_pairs'
+  path_to_target_data: 'data/synthetic_data/raw_pairs'
+  split_file: 'data/synthetic_data/synthetic.csv'
+  labels: ['0', '1']
+save:
+  project_name: 'reward-models-synthetic'
+  run_name_prefix: 'synthetic-dpl'

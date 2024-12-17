@@ -1,0 +1,30 @@
+model:
+  model_type: 'reward'
+  device: 'cuda:0'
+  input_dim: 4096
+  hidden_dim: 256
+  target_input_encoder: 'mlp'
+  # BTL
+  is_conditional: False
+  distributional_head: False
+loss:
+  beta_kl: None
+training:
+  num_epochs: 2
+  lr: 1e-4
+  seed: 1
+  dry_run: False
+data:
+  min_num_context: 0
+  max_num_context: 10
+  num_targets: 20
+  batch_size: 64
+  context_datatype: 'embeddings'
+  target_datatype: 'embeddings'
+  path_to_context_data: 'data/ultra_feedback/embedded_pairs/meta-llama/Meta-Llama-3-8B'
+  path_to_target_data: 'data/ultra_feedback/embedded_pairs/meta-llama/Meta-Llama-3-8B'
+  split_file: 'data/ultra_feedback/hht_pairs_conflict_1.0.csv'
+  labels: ['helpfulness']
+save:
+  project_name: 'reward-models-ultrafeedback'
+  run_name_prefix: 'hht-btl-helpfulness'
