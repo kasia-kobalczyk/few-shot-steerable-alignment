@@ -115,7 +115,6 @@ Train different BTL-DPO models (`helpfulness`, `honesty`, `mixed`), and NP-DPO r
 ```bash
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_mixed
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_helpfulness
-python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_truthfulness
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_honesty
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_nppl_mixed
 ```

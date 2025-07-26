@@ -19,9 +19,9 @@ training:
   dry_run: False
 data:
   min_num_context: 0
-  max_num_context: 6
-  num_targets: 9
-  batch_size: 1
+  max_num_context: 7
+  num_targets: 10
+  batch_size: 2
   context_datatype: 'embeddings'
   target_datatype: 'tokens'
   path_to_context_data: '/mnt/pdata/knk25/cPL/data/ultra_feedback/embedded_pairs_1024/meta-llama/Meta-Llama-3-8B'

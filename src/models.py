@@ -319,7 +319,7 @@ class ConditionalPolicyDecoder(nn.Module):
         per_token_logps[~loss_mask] = 0
         per_token_logps = torch.roll(per_token_logps, shifts=1, dims=1)
 
-        return per_token_logps[:, 1:].sum(-1)
+        return per_token_logps[:, 1:].sum(-1).view(num_z_samples, bs, num_targets, 2, -1)
 
 
 class TargetEncoder(nn.Module):
