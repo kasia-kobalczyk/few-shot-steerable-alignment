@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from torch.nn.modules.transformer import MultiheadAttention
 from trl.models.modeling_base import create_reference_model
+from trl.trainer.utils import selective_log_softmax
 import os 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -135,36 +136,17 @@ class LLMPolicy(nn.Module):
         else:
             outputs = self.model(pairs_T, choices_T)
 
-        logprobs = self.get_logprobs(
-            outputs['logprobs'], pairs_T['response_start_idx'], pairs_T['cls_idx'])
-        ref_logprobs = self.get_logprobs(
-            outputs['ref_logprobs'], pairs_T['response_start_idx'], pairs_T['cls_idx'])
+        logprobs = self.get_logprobs(outputs['logprobs'])
+        ref_logprobs = self.get_logprobs(outputs['ref_logprobs'])
         outputs = {
             'logprobs': logprobs,
             'ref_logprobs': ref_logprobs
         }
         return outputs
     
-    def _mask_logprobs(self, logprobs, response_start_idx, cls_idx):
-        """
-        Mask logprobs for the response tokens of a single option
-
-        logprobs.shape (num_z_samples, batch_size, num_targets, max_len)
-        response_start_idx.shape (batch_size, num_targets)
-        cls_idx.shape (batch_size, num_targets)
-        """
-        logprobs = logprobs.clone()
-        num_z_samples, bs, num_targets, max_len = logprobs.shape
-        for i in range(bs):
-            for j in range(num_targets):
-                logprobs[:, i, j, response_start_idx[i, j]:cls_idx[i, j] + 1] = 0.0
-        return logprobs
-
-    def get_logprobs(self, logprobs, response_start_idx, cls_idx):
+    def get_logprobs(self, logprobs):
         logprobs_a, logprobs_b = logprobs.split(1, dim=-2) # (num_z_samples, batch_size, num_targets, max_len)
         logprobs_a, logprobs_b = logprobs_a.squeeze(-2), logprobs_b.squeeze(-2)
-        logprobs_a = self._mask_logprobs(logprobs_a, response_start_idx[:, :, 0], cls_idx[:, :, 1]).sum(dim=-1, keepdim=True)
-        logprobs_b = self._mask_logprobs(logprobs_b, response_start_idx[:, :, 1], cls_idx[:, :, 1]).sum(dim=-1, keepdim=True)
         logprobs = torch.cat([logprobs_a, logprobs_b], dim=-1) # (num_z_samples, batch_size, num_targets, 2)
         return logprobs
     
@@ -191,22 +173,34 @@ class SimpleLLMPolicy(nn.Module):
         )
         self.reference_model = create_reference_model(self.model)
 
-    def get_logprobs(self, model, input_ids, attention_mask):
+    def get_logprobs(self, model, input_ids, attention_mask, response_start_idx, response_end_idx):
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask
         )
         logits = outputs.logits
-        labels = input_ids[:, 1:].clone()
-        logits = logits[:, :-1, :]
-        logprobs = logits.log_softmax(dim=-1).gather(-1, labels.unsqueeze(-1)).squeeze(2)
-        return logprobs
+        
+        loss_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+        for i in range(input_ids.shape[0]):
+            loss_mask[i, response_start_idx[i]:response_end_idx[i]] = True
+        
+         # Offset the logits by one to align with the labels
+        labels = torch.roll(input_ids, shifts=-1, dims=1)
+        loss_mask = torch.roll(loss_mask, shifts=-1, dims=1).bool()
+        
+        labels[~loss_mask] = 0  # dummy token; we'll ignore the losses on these tokens later
+        per_token_logps = selective_log_softmax(logits, labels)
+        per_token_logps[~loss_mask] = 0
+        per_token_logps = torch.roll(per_token_logps, shifts=1, dims=1)
+        return per_token_logps[:, 1:].sum(-1)
 
     def forward(self, pairs_T, choices_T):
         input_ids = pairs_T['input_ids'] # (batch_size, num_targets, 2, max_len)
         attention_mask = pairs_T['attention_mask'] # (batch_size, num_targets, 2, max_len)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
         attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
+        response_start_idx = pairs_T['response_start_idx'].view(-1) # (batch_size * num_targets)
+        response_end_idx = pairs_T['cls_idx'].view(-1) # (batch_size * num_targets)
 
         bs, num_targets, _, _ = pairs_T['input_ids'].shape
 
@@ -214,14 +208,18 @@ class SimpleLLMPolicy(nn.Module):
             ref_logprobs = self.get_logprobs(
                 model=self.reference_model,
                 input_ids=input_ids,
-                attention_mask=attention_mask
+                attention_mask=attention_mask,
+                response_start_idx=response_start_idx,
+                response_end_idx=response_end_idx
             )
             ref_logprobs = ref_logprobs.view(bs, num_targets, 2, -1).unsqueeze(0)
         
         logprobs = self.get_logprobs(
             model=self.model,
             input_ids=input_ids,
-            attention_mask=attention_mask
+            attention_mask=attention_mask,
+            response_start_idx=response_start_idx,
+            response_end_idx=response_end_idx
         )
         logprobs = logprobs.view(bs, num_targets, 2, -1).unsqueeze(0)
         outputs = {
@@ -289,6 +287,9 @@ class ConditionalPolicyDecoder(nn.Module):
         attention_mask = pairs_T['attention_mask'] # (batch_size, num_targets, 2, max_len)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
         attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
+        response_start_idx = pairs_T['response_start_idx'].view(-1) # (batch_size * num_targets)
+        response_end_idx = pairs_T['cls_idx'].view(-1) # (batch_size * num_targets)
+
         
         if ref_model:
             with torch.no_grad():
@@ -304,11 +305,21 @@ class ConditionalPolicyDecoder(nn.Module):
             )
         
         logits = outputs.logits
-        logits = logits[:, :-1, :]
-        logprobs = logits.log_softmax(dim=-1).gather(-1, input_ids[:, 1:].unsqueeze(-1))
-        logprobs = logprobs.view(num_z_samples, bs, num_targets, 2, -1)
+        
+        loss_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+        for i in range(input_ids.shape[0]):
+            loss_mask[i, response_start_idx[i]:response_end_idx[i]] = True
+        
+         # Offset the logits by one to align with the labels
+        labels = torch.roll(input_ids, shifts=-1, dims=1)
+        loss_mask = torch.roll(loss_mask, shifts=-1, dims=1).bool()
+        
+        labels[~loss_mask] = 0  # dummy token; we'll ignore the losses on these tokens later
+        per_token_logps = selective_log_softmax(logits, labels)
+        per_token_logps[~loss_mask] = 0
+        per_token_logps = torch.roll(per_token_logps, shifts=1, dims=1)
 
-        return logprobs
+        return per_token_logps[:, 1:].sum(-1)
 
 
 class TargetEncoder(nn.Module):

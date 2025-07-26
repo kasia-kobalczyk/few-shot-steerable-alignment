@@ -84,7 +84,7 @@ python data/embed_data.py
 python data/split_uf_data.ipynb
 
 # Generate embedds with gemma-2b (used for DPO training only)
-python data/tokenize_data.py --llm_name="google/gemma-2b" --max_length=512
+python data/tokenize_data.py --llm_name="Qwen/Qwen2.5-1.5B-Instruct" --max_length=512
 ```
 
 ### 3. Reward Model Training
@@ -115,6 +115,7 @@ Train different BTL-DPO models (`helpfulness`, `honesty`, `mixed`), and NP-DPO r
 ```bash
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_mixed
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_helpfulness
+python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_truthfulness
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_btl_honesty
 python src/train.py --config-path=../config/hh_dpo_config --config-name=hh_dpo_config_nppl_mixed
 ```

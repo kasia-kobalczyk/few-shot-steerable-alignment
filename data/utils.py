@@ -69,15 +69,15 @@ def setup_dataloaders(cfg, splits=['train', 'val', 'test']):
 
     for split in splits:
         context_dataset = PreferenceDataset(
-            path_to_data=f'{root}/{cfg.path_to_context_data}',
-            split_file=f'{root}/{cfg.split_file}',
+            path_to_data=f'{cfg.path_to_context_data}',
+            split_file=f'{cfg.split_file}',
             split=split,
             datatype=cfg.context_datatype,
             labels=cfg.labels
         )
         target_dataset = PreferenceDataset(
-            path_to_data=f'{root}/{cfg.path_to_target_data}',
-            split_file=f'{root}/{cfg.split_file}',
+            path_to_data=f'{cfg.path_to_target_data}',
+            split_file=f'{cfg.split_file}',
             split=split,
             datatype=cfg.target_datatype,
             labels=cfg.labels

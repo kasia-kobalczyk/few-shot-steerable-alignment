@@ -166,7 +166,14 @@ class Trainer:
                         if val_loss < min_eval_loss:
                             min_eval_loss = val_loss
 
-                            state_dict_save = self.model.state_dict()
+                            if self.cfg.model.model_type == 'policy':
+                                # Save only LoRA parameters for policy models
+                                state_dict_save = {}
+                                for name, param in self.model.named_parameters():
+                                    if 'lora_' in name:  # Only save LoRA parameters
+                                        state_dict_save[name] = param
+                            else:
+                                state_dict_save = self.model.state_dict()
 
                             torch.save(state_dict_save, f"{self.save_dir}/model_best.pt")
                             torch.save(
@@ -233,7 +240,7 @@ def train(cfg):
     if not cfg.training.dry_run:
         # Create save folder and save cfg
         run_name_prefix = cfg.save.run_name_prefix if cfg.save.run_name_prefix else "run"
-        save_dir = f"saves/{cfg.save.project_name}"
+        save_dir = f"/mnt/pdata/caf83/few-shot-alignment/saves/{cfg.save.project_name}"
         os.makedirs(save_dir, exist_ok=True)
         save_no = len(os.listdir(save_dir))
         save_no = [
@@ -274,6 +281,5 @@ def train(cfg):
 
 if __name__ == "__main__":
     train()
-    
 
-    
+
