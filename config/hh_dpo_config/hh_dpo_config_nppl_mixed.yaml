@@ -18,7 +18,7 @@ loss:
   beta_dpo: 0.05
 training:
   num_epochs: 1
-  lr: 1e-6
+  lr: 1e-5
   seed: 0
   dry_run: False
 data:

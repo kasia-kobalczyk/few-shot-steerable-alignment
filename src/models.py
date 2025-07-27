@@ -274,7 +274,7 @@ class ConditionalPolicyDecoder(nn.Module):
             },
             hidden_dim=cfg.hidden_dim
         )
-        self.reference_model = create_reference_model(self.conditional_llm.base_model)
+        self.reference_model = create_reference_model(self.conditional_llm)
 
     def forward(self, pairs_T, z_C, ref_model=False):
         """

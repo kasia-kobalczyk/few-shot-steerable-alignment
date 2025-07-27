@@ -1,6 +1,6 @@
 model:
   model_type: 'reward'
-  device: 'cuda:0'
+  device: 'cuda:1'
   input_dim: 4096
   hidden_dim: 256
   target_input_encoder: 'mlp'

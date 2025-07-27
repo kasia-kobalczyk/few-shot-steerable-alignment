@@ -5,191 +5,202 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.utils import setup_llm
 
+import torch
+import torch.nn as nn
+from typing import List, Sequence, Optional, Tuple, Union
+
+# ------------------------------------------------------------
+# 1. Small reusable MLP helper
+# ------------------------------------------------------------
 class MLP(nn.Module):
+    """Simple feed‑forward network: (Linear→BN?→Act)×(num_hidden‑1) → Linear."""
+
     def __init__(
         self,
-        input_size,
-        hidden_size,
-        num_hidden,
-        output_size,
-        activation=nn.GELU(),
-        batch_norm=False,
-    ):
-        super(MLP, self).__init__()
+        input_size: int,
+        hidden_size: int,
+        output_size: int,
+        num_hidden: int = 1,
+        activation: nn.Module = nn.GELU(),
+        batch_norm: bool = False,
+    ) -> None:
+        super().__init__()
 
-        self.layers = nn.ModuleList()
+        layers: List[nn.Module] = []
+        dim_in = input_size
+        for _ in range(max(num_hidden - 1, 0)):
+            layers.append(nn.Linear(dim_in, hidden_size, bias=not batch_norm))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(hidden_size))
+            layers.append(activation)
+            dim_in = hidden_size
+        # last linear
+        layers.append(nn.Linear(dim_in, output_size, bias=not batch_norm))
+        self.net = nn.Sequential(*layers)
 
-        if num_hidden > 0:
-            for i in range(num_hidden - 1):
-                self.layers.append(nn.Linear(input_size, hidden_size))
-                if batch_norm:
-                    self.layers.append(nn.BatchNorm1d(hidden_size))
-                self.layers.append(activation)
-                input_size = hidden_size
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # (B, *)
+        return self.net(x)
 
-            self.layers.append(nn.Linear(hidden_size, output_size, bias=not batch_norm))
-
-        else:
-            self.layers.append(nn.Linear(input_size, output_size))
-
-    def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        return x
-
-
+# ------------------------------------------------------------
+# 2. FiLM modulation block (Feature‑wise Linear Modulation)
+# ------------------------------------------------------------
 class FiLM(nn.Module):
-    """
-    FiLM layer with an MLP for gamma and beta, configurable by the number of layers and intermediate hidden size.
-    """
-
-    def __init__(self, input_size, hidden_size, output_size, num_hidden=2):
-        super(FiLM, self).__init__()
-
-        # Create the MLP for gamma and beta with the specified number of layers and hidden dimensions
-        self.gamma_mlp = MLP(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            output_size=output_size, 
-            num_hidden=num_hidden
-        )
-        self.beta_mlp = MLP(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            output_size=output_size, 
-            num_hidden=num_hidden
-        )
-
-        self._initialize_last_gamma_weights(self.gamma_mlp.layers)
-        self._initialize_last_beta_weights(self.beta_mlp.layers)
-
-    def _initialize_last_gamma_weights(self, mlp):
-        """
-        Initialize MLP weights with small values for near-identity behavior.
-        """
-        nn.init.normal_(mlp[-1].weight, mean=0.0, std=1e-4)
-        nn.init.normal_(mlp[-1].bias, mean=1.0, std=1e-4)
-
-    def _initialize_last_beta_weights(self, mlp):
-        """
-        Initialize MLP weights with small values for near-identity behavior.
-        """
-        nn.init.normal_(mlp[-1].weight, mean=0.0, std=1e-4)
-        nn.init.normal_(mlp[-1].bias, mean=0.0, std=1e-4)
-
-    def forward(self, hidden_states_tuple, latent_variable):
-        # Apply FiLM modulation: gamma * hidden_states + beta
-        gamma = self.gamma_mlp(latent_variable).unsqueeze(1)
-        beta = self.beta_mlp(latent_variable).unsqueeze(1)
-        return (gamma * hidden_states_tuple[0] + beta,) + hidden_states_tuple[1:]
-
-
-class ConditionalLLM(nn.Module):
-    """
-    AutoModelForCausalLM model with FiLM layers for conditional modulation.
-    """
+    """Modulates hidden states given a latent tensor γ, β = f(latent)."""
 
     def __init__(
-            self, 
-            llm_name, 
-            num_film_layers, 
-            is_lora_tunable, 
-            lora_kwargs, 
-            hidden_dim
-        ):
-        super(ConditionalLLM, self).__init__()
-
-
-        # Store the base model
-        self.base_model = setup_llm(
-            llm_name,
-            causal=True,
-            is_lora_tunable=is_lora_tunable,
-            lora_kwargs=lora_kwargs,
-        )
-
-        self.layers = self._get_transformer_layers()
-        if num_film_layers == -1:
-            num_film_layers = len(self.layers)
-
-        self.num_film_layers = num_film_layers
-        
-    
-        # Add FiLM layers
-        print('Setting up FiLM layers ...')
-        self.film_layers = nn.ModuleList(
-            [
-                FiLM(
-                    input_size=hidden_dim, 
-                    hidden_size=hidden_dim, 
-                    output_size=self.base_model.config.hidden_size,
-                    num_hidden=1,
-                )
-                for _ in range(self.num_film_layers)
-            ]
-        )
-        print('Registering FiLM layers ...')
-        self._register_film_hooks()
-
-    def _apply_film(self, module, input, output, film_layer, latent_variable):
-        return film_layer(output, latent_variable)
-
-    def _register_film_hooks(self):
-        for i, layer_module in enumerate(self.layers[-self.num_film_layers:]):
-            layer_module.register_forward_hook(
-                lambda module, input, output, i=i: self._apply_film(
-                    module,
-                    input,
-                    output,
-                    self.film_layers[i],
-                    self.current_latent_variable,
-                )
-            )
-
-    def _get_transformer_layers(self):
-        if hasattr(self.base_model, "transformer"):
-            return self.base_model.transformer.h
-        elif hasattr(self.base_model, "encoder"):
-            return self.base_model.encoder.layer
-        elif hasattr(self.base_model, "model"):
-            try:
-                return self.base_model.model.layers
-            except AttributeError:
-                return self.base_model.model.model.layers
-        elif hasattr(self.base_model, "layers"):
-            return self.base_model.layers
-        else:
-            raise ValueError("Unsupported transformer architecture")
-
-    def forward(self, input_ids, attention_mask=None, latent_variable=None):
-        self.current_latent_variable = latent_variable
-        with torch.amp.autocast(device_type='cuda'):
-            outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
-        return outputs
-
-    def conditional_generate(
         self,
-        latent_variable,
-        input_ids,
-        **kwargs
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        target_dim: int,
+        num_hidden: int = 1,
+    ) -> None:
+        super().__init__()
+        self.gamma_mlp = MLP(latent_dim, hidden_dim, target_dim, num_hidden=num_hidden)
+        self.beta_mlp = MLP(latent_dim, hidden_dim, target_dim, num_hidden=num_hidden)
+        self._init_identity()
 
-        # Set the latent variable on the hook and go fishing!
-        self.current_latent_variable = latent_variable
+    def _init_identity(self) -> None:
+        """Near‑identity init so base model starts untouched."""
+        nn.init.zeros_(self.gamma_mlp.net[-1].weight)   # multiplicative scale
+        nn.init.ones_ (self.gamma_mlp.net[-1].bias)
 
-        generated_ids = self.base_model.generate(
-            input_ids,
-            **kwargs
-        )
+        nn.init.zeros_(self.beta_mlp.net[-1].weight)    # additive shift
+        nn.init.zeros_(self.beta_mlp.net[-1].bias)  
 
-        return generated_ids
+    def forward(self, hidden: torch.Tensor, latent: torch.Tensor) -> torch.Tensor:  # (B,L,H)
+        multiplier = self.gamma_mlp(latent).unsqueeze(1)  # (B,1,H)
+        bias = self.beta_mlp(latent).unsqueeze(1)
+        return hidden * multiplier + bias
 
+# ------------------------------------------------------------
+# 3. Wrapper block that embeds FiLM directly (no hooks, batch‑safe)
+# ------------------------------------------------------------
+class BlockWithFiLM(nn.Module):
+    """Replaces a transformer block such that FiLM is *inside* the forward graph."""
+
+    def __init__(self, base_block: nn.Module, film: FiLM):
+        super().__init__()
+        self.block = base_block
+        self.film = film
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        latent: torch.Tensor = None,
+        **kwargs,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
+        """Assumes the underlying block returns hidden_states as first element."""
+        if latent is None:
+            return self.block(hidden_states, **kwargs)
+        out = self.block(hidden_states, **kwargs)
+        if isinstance(out, tuple):
+            hidden, *rest = out
+            hidden = self.film(hidden, latent)
+            return (hidden, *rest)
+        else:
+            return self.film(out, latent)
+        
     def __getattr__(self, name):
-        """
-        Delegate attribute access to the base model if not found in this class.
-        This allows access to all methods and attributes of the base model.
-        """
         try:
             return super().__getattr__(name)
         except AttributeError:
-            return getattr(self.base_model, name)
+            return getattr(self.block, name)
+
+# ------------------------------------------------------------
+# 4. ConditionalLLM – no forward hooks, supports per‑sample latents
+# ------------------------------------------------------------
+class ConditionalLLM(nn.Module):
+    """LLM wrapper that injects FiLM modulations inside chosen transformer layers."""
+
+    def __init__(
+        self,
+        llm_name: str,
+        num_film_layers: Union[int, Sequence[int]] = -1,
+        hidden_dim: int = 512,
+        is_lora_tunable: bool = False,
+        lora_kwargs: Optional[dict] = None,
+    ) -> None:
+        super().__init__()
+
+        # 4.1 Load the base causal LM (HuggingFace GPT‑like)
+        self.base = setup_llm(
+            llm_name,
+            causal=True,
+            is_lora_tunable=is_lora_tunable,
+            lora_kwargs=lora_kwargs or {},
+        )
+
+        # 4.2 Get the list of transformer layers (robust across models)
+        self.layers = self._get_layers()
+        hidden_size = self.base.config.hidden_size
+
+        # 4.3 Decide which layers to FiLM
+        if isinstance(num_film_layers, int):  # e.g. 12  or  -1 for all
+            if num_film_layers == -1:
+                indices = list(range(len(self.layers)))
+            else:
+                indices = list(range(num_film_layers))
+        else:
+            indices = list(num_film_layers)
+        self.film_indices = indices
+
+        # 4.4 Replace chosen layers with FiLM‑wrapped versions
+        for idx in indices:
+            orig = self.layers[idx]
+            film = FiLM(hidden_dim, hidden_dim, hidden_size, num_hidden=1)
+            self.layers[idx] = BlockWithFiLM(orig, film)
+
+    # --------------------------------------------------------
+    # forward / generate
+    # --------------------------------------------------------
+    def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, latent_variable: Optional[torch.Tensor] = None, **kwargs):
+        print("Forward method called")
+        return self.base(input_ids=input_ids, attention_mask=attention_mask, latent=latent_variable, **kwargs)
+
+    @torch.no_grad()
+    def conditional_generate(self, latent: torch.Tensor, input_ids: torch.Tensor, **generate_kwargs):
+        
+        def _add_latent(module, args, kwargs):
+            kwargs["latent"] = latent
+            return args, kwargs
+
+        # Register hook for each transformer layer that has FiLM
+        handles = []
+        for idx in self.film_indices:
+            handle = self.layers[idx].register_forward_pre_hook(_add_latent, with_kwargs=True)
+            handles.append(handle)
+            
+        try:
+            result = self.base.generate(input_ids, **generate_kwargs)
+            return result
+        finally:
+            for handle in handles:
+                handle.remove()
+
+    # --------------------------------------------------------
+    # helpers
+    # --------------------------------------------------------
+    def _get_layers(self):
+        """Return list‑like container of transformer blocks."""
+        model = self.base
+        if hasattr(model, "transformer"):
+            return model.transformer.h
+        if hasattr(model, "encoder"):
+            return model.encoder.layer
+        if hasattr(model, "model"):
+            try:
+                return model.model.layers
+            except AttributeError:
+                return model.model.model.layers
+        if hasattr(model, "layers"):
+            return model.layers
+        raise ValueError("Unsupported architecture: cannot find transformer layers")
+
+    # ------------------------------------------------------------------
+    # Attribute passthrough: anything not found here → delegate to base.
+    # ------------------------------------------------------------------
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.base, name)

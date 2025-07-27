@@ -4,6 +4,7 @@ wandb
 output
 .vscode
 outputs
+generations
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

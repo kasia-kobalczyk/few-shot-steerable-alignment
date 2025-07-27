@@ -35,9 +35,17 @@ class Trainer:
             self.model = LLMPolicy(cfg.model)
             self.loss_func = DPOLoss(cfg.loss)
         self.model.to(self.device)
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=cfg.training.lr, eps=3e-5
-        )
+        param_groups = [
+            {
+                'params': [p for n, p in self.model.named_parameters() if 'film' not in n],
+                'lr': cfg.training.lr
+            },
+            {
+                'params': [p for n, p in self.model.named_parameters() if 'film' in n],
+                'lr': cfg.training.lr
+            }
+        ]
+        self.optimizer = torch.optim.AdamW(param_groups, eps=3e-5)
 
         self.params_to_save = []
 
@@ -170,7 +178,7 @@ class Trainer:
                                 # Save only LoRA parameters for policy models
                                 state_dict_save = {}
                                 for name, param in self.model.named_parameters():
-                                    if 'lora_' in name or 'film_' in name:  # Only save LoRA and FiLMparameters
+                                    if 'lora_' in name or 'film' in name:  # Only save LoRA and FiLMparameters
                                         state_dict_save[name] = param
                             else:
                                 state_dict_save = self.model.state_dict()

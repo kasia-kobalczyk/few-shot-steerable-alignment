@@ -224,24 +224,25 @@ def generate_conditional(
         bs = pairs_C.shape[0]
         z_C_large = torch.zeros(bs, pairs_C.shape[1], 256, dtype=torch.float32).to(device)
         
-        for b in range(bs):
-            for pos in range(pairs_C.shape[1]):
-                # Sample context indices for this input
-                context_idx = torch.tensor(np.random.choice(10, ctx_len, replace=False), dtype=torch.long)
+        if ctx_len > 0:
+            for b in range(bs):
+                for pos in range(pairs_C.shape[1]):
+                    # Sample context indices for this input
+                    context_idx = torch.tensor(np.random.choice(10, ctx_len, replace=False), dtype=torch.long)
+                    
+                    # Extract context pairs and choices for this input
+                    pairs_C_sliced = pairs_C[b, context_idx].clone().unsqueeze(0)
+                    choices_C_sliced = choices_C[b, context_idx].clone().unsqueeze(0)
+                    
+                    # Get latent variable for each context position
                 
-                # Extract context pairs and choices for this input
-                pairs_C_sliced = pairs_C[b, context_idx].clone().unsqueeze(0)
-                choices_C_sliced = choices_C[b, context_idx].clone().unsqueeze(0)
-                
-                # Get latent variable for each context position
-            
-                with torch.no_grad():
-                    z_C = policy.model.get_latent_var(None, None, pairs_C_sliced, choices_C_sliced)
-                    z_C_large[b, pos] = z_C[0, 0].to(torch.float32)  # Take first batch, first position
+                    with torch.no_grad():
+                        z_C = policy.model.get_latent_var(None, None, pairs_C_sliced, choices_C_sliced)
+                        z_C_large[b, pos] = z_C[0, 0].to(torch.float32)  # Take first batch, first position
 
         with torch.autocast(torch.device(device).type):
             out_ids = policy.model.decoder.conditional_llm.conditional_generate(
-                latent_variable=z_C_large.flatten(0,1),
+                latent=z_C_large.flatten(0,1),
                 input_ids=model_inputs["input_ids"],
                 attention_mask=model_inputs["attention_mask"],
                 **gen_kwargs,
@@ -318,7 +319,7 @@ def main():  # noqa: C901 – a bit long but still readable
     parser.add_argument("--honesty_reward_dir", type=str, required=True)
     parser.add_argument("--split", type=str, default="test", choices=["train", "val", "test"])
     parser.add_argument("--out_dir", type=str, required=True)
-    parser.add_argument("--context_lengths", type=int, nargs="*", default=[1, 3, 5, 10])
+    parser.add_argument("--context_lengths", type=int, nargs="*", default=[0, 1, 3, 5, 10])
     # Generation hyper‑parameters – feel free to tweak.
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--temperature", type=float, default=0.7)
@@ -459,8 +460,8 @@ def main():  # noqa: C901 – a bit long but still readable
                     
             sample_id_2 = sample_id
                     
-            if sample_id > 2000:  # Limit the number of samples to avoid too large output files
-                print(f"Reached sample limit of 1000, stopping generation.")
+            if sample_id > 500:  # Limit the number of samples to avoid too large output files
+                print(f"Reached sample limit of 10000, stopping generation.")
                 break
         
 
