@@ -14,13 +14,13 @@ loss:
   beta_dpo: 0.05
 training:
   num_epochs: 1
-  lr: 1e-5
+  lr: 1e-6
   seed: 0
   dry_run: False
 data:
   min_num_context: 0
-  max_num_context: 7
-  num_targets: 10
+  max_num_context: 6
+  num_targets: 9
   batch_size: 2
   context_datatype: 'embeddings'
   target_datatype: 'tokens'

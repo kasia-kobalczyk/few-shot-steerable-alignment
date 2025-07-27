@@ -173,7 +173,7 @@ class SimpleLLMPolicy(nn.Module):
         )
         self.reference_model = create_reference_model(self.model)
 
-    def get_logprobs(self, model, input_ids, attention_mask, response_start_idx, response_end_idx):
+    def get_logprobs(self, model, input_ids, attention_mask, response_start_idx, response_end_idx, bs, num_targets):
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask
@@ -192,7 +192,7 @@ class SimpleLLMPolicy(nn.Module):
         per_token_logps = selective_log_softmax(logits, labels)
         per_token_logps[~loss_mask] = 0
         per_token_logps = torch.roll(per_token_logps, shifts=1, dims=1)
-        return per_token_logps[:, 1:].sum(-1)
+        return per_token_logps[:, 1:].sum(-1).view(bs, num_targets, 2, -1).unsqueeze(0)
 
     def forward(self, pairs_T, choices_T):
         input_ids = pairs_T['input_ids'] # (batch_size, num_targets, 2, max_len)
@@ -210,18 +210,21 @@ class SimpleLLMPolicy(nn.Module):
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 response_start_idx=response_start_idx,
-                response_end_idx=response_end_idx
+                response_end_idx=response_end_idx,
+                bs=bs,
+                num_targets=num_targets
             )
-            ref_logprobs = ref_logprobs.view(bs, num_targets, 2, -1).unsqueeze(0)
         
         logprobs = self.get_logprobs(
             model=self.model,
             input_ids=input_ids,
             attention_mask=attention_mask,
             response_start_idx=response_start_idx,
-            response_end_idx=response_end_idx
+            response_end_idx=response_end_idx,
+            bs=bs,
+            num_targets=num_targets
         )
-        logprobs = logprobs.view(bs, num_targets, 2, -1).unsqueeze(0)
+        
         outputs = {
             'logprobs': logprobs,
             'ref_logprobs': ref_logprobs

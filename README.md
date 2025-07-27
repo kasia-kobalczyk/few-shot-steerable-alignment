@@ -139,6 +139,58 @@ jupyter notebook eval/eval_uf_rewards.ipynb
 python eval_uf_dpo.py
 ```
 
+### 5. Generation
+
+```bash
+# Simple (un‑conditional) policy model on helpfulness
+python src/generate.py \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-btl-mixed_1 \
+    --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_0 \
+    --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_0 \
+    --split test \
+    --labels helpfulness \
+    --out_dir ./generations/helpfulness/simple/ \
+    --device 0 
+```
+
+```bash
+# Simple (un‑conditional) policy model on honesty
+python src/generate.py \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-btl-mixed_1 \
+    --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_0 \
+    --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_0 \
+    --split test \
+    --labels honesty \
+    --out_dir ./generations/honesty/simple/ \
+    --device 1
+```
+
+```bash
+# Conditional policy model (few‑shot conditioning) on helpfulness
+python src/generate.py \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed_1 \
+    --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_0 \
+    --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_0 \
+    --split test \
+    --labels helpfulness \
+    --out_dir ./generations/helpfulness/conditional/ \
+    --context_lengths 1 3 5 10 \
+    --device 2
+```
+
+```bash
+# Conditional policy model (few‑shot conditioning) on honesty
+python src/generate.py \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed_1 \
+    --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_0 \
+    --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_0 \
+    --split test \
+    --labels honesty \
+    --out_dir ./generations/honesty/conditional/ \
+    --context_lengths 1 3 5 10 \
+    --device 1
+```
+
 ## Configuration
 
 All experiments use the Hydra framework for configuration management. Modify the YAML files in the `config/` directory to adjust experimental parameters. Template configuration files are provided for reference.

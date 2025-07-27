@@ -4,6 +4,7 @@ import numpy as np
 from datasets import load_from_disk
 import os
 import pandas as pd
+import random
 
 class PreferenceDataset(Dataset):
     def __init__(
@@ -70,11 +71,13 @@ class ContextTargetDataset(Dataset):
         self.target_dataset = target_dataset
         self.labels = self.context_dataset.labels
        
-        self.common_idx = list(set(context_dataset.data.index).intersection(set(target_dataset.data.index)))
+        self.common_idx = sorted(list(set(context_dataset.data.index).intersection(set(target_dataset.data.index))))
+        random.seed(42)  # Add this line to the __init__
+        self.rng = random.Random(42)  # Create a separate Random instance
 
     def __getitem__(self, idx):
-        label = np.random.choice(self.labels)
-        idx = np.random.choice(self.common_idx, self.num_targets)
+        label = self.rng.choice(self.labels)
+        idx = self.rng.sample(self.common_idx, self.num_targets)
 
         target_data = self.target_dataset.get(label, idx)
         context_data = self.context_dataset.get(label, idx)

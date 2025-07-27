@@ -57,10 +57,10 @@ def get_dataloader(dataset, cfg):
     data_loader = torch.utils.data.DataLoader(
         dataset, 
         batch_size=cfg.batch_size, 
-        shuffle=True, 
+        shuffle=False, 
         collate_fn=lambda batch: collate_fn(batch, cfg), 
         drop_last=True,
-        num_workers=16
+        num_workers=1
     )
     return data_loader
 
