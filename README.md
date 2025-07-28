@@ -168,25 +168,25 @@ python src/generate.py \
 ```bash
 # Conditional policy model (few‑shot conditioning) on helpfulness
 python src/generate.py \
-    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-gemma_3 \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-mega_0 \
     --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_1 \
     --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_1 \
     --split test \
     --labels helpfulness \
-    --out_dir ./generations/helpfulness/conditional_gemma/ \
+    --out_dir ./generations/helpfulness/conditional_mega/ \
     --context_lengths 0 1 3 5 10 \
-    --device 0
+    --device 2
 ```
 
 ```bash
 # Conditional policy model (few‑shot conditioning) on honesty
 python src/generate.py \
-    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-gemma_3 \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-mega_0 \
     --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_1 \
     --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_1 \
     --split test \
     --labels honesty \
-    --out_dir ./generations/honesty/conditional_gemma/ \
+    --out_dir ./generations/honesty/conditional_mega/ \
     --context_lengths 0 1 3 5 10 \
     --device 3
 ```

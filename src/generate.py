@@ -227,21 +227,20 @@ def generate_conditional(
         bs = pairs_C.shape[0]
         z_C_large = torch.zeros(bs, pairs_C.shape[1], 256, dtype=torch.float32).to(device)
         
-        if ctx_len > 0:
-            for b in range(bs):
-                for pos in range(pairs_C.shape[1]):
-                    # Sample context indices for this input
-                    context_idx = torch.tensor(np.random.choice(10, ctx_len, replace=False), dtype=torch.long)
-                    
-                    # Extract context pairs and choices for this input
-                    pairs_C_sliced = pairs_C[b, context_idx].clone().unsqueeze(0)
-                    choices_C_sliced = choices_C[b, context_idx].clone().unsqueeze(0)
-                    
-                    # Get latent variable for each context position
+        for b in range(bs):
+            for pos in range(pairs_C.shape[1]):
+                # Sample context indices for this input
+                context_idx = torch.tensor(np.random.choice(10, ctx_len, replace=False), dtype=torch.long)
                 
-                    with torch.no_grad():
-                        z_C = policy.model.get_latent_var(None, None, pairs_C_sliced, choices_C_sliced)
-                        z_C_large[b, pos] = z_C[0, 0].to(torch.float32)  # Take first batch, first position
+                # Extract context pairs and choices for this input
+                pairs_C_sliced = pairs_C[b, context_idx].clone().unsqueeze(0)
+                choices_C_sliced = choices_C[b, context_idx].clone().unsqueeze(0)
+                
+                # Get latent variable for each context position
+            
+                with torch.no_grad():
+                    z_C = policy.model.get_latent_var(None, None, pairs_C_sliced, choices_C_sliced)
+                    z_C_large[b, pos] = z_C[0, 0].to(torch.float32)  # Take first batch, first position
 
         with torch.autocast(torch.device(device).type):
             out_ids = policy.model.decoder.conditional_llm.conditional_generate(

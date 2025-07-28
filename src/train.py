@@ -178,7 +178,7 @@ class Trainer:
                                 # Save only LoRA parameters for policy models
                                 state_dict_save = {}
                                 for name, param in self.model.named_parameters():
-                                    if 'lora_' in name or 'film' in name:  # Only save LoRA and FiLMparameters
+                                    if 'lora_' in name or 'film' in name or 'context_encoder' in name:  # Only save LoRA and FiLMparameters AND context encoder you wild dummy!
                                         state_dict_save[name] = param
                             else:
                                 state_dict_save = self.model.state_dict()
@@ -195,7 +195,7 @@ class Trainer:
                             # Save only LoRA parameters for policy models
                             state_dict_save = {}
                             for name, param in self.model.named_parameters():
-                                if 'lora_' in name or 'film' in name:  # Only save LoRA and FiLMparameters
+                                if 'lora_' in name or 'film' in name or 'context_encoder' in name:  # Only save LoRA and FiLMparameters
                                     state_dict_save[name] = param
                         else:
                             state_dict_save = self.model.state_dict()

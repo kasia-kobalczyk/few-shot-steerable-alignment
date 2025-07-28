@@ -53,7 +53,7 @@ save_dict = {
     #'hh-btl-mixed' : f'{root}/hh-dpo-btl-mixed_1',
     #'hh-btl-honesty': f'{root}/hh-dpo-btl-honesty_0',
     #'hh-btl-helpfulness': f'{root}/hh-dpo-btl-helpfulness_0',
-    'hh-nppl-mixed-new_1' : f'{root}//hh-dpo-nppl-mixed-gemma_3',
+    'hh-nppl-mixed-new_1' : f'{root}/hh-dpo-nppl-mixed-new_0',
     # 'hht-btl-helpfulness': f'{root}/hht-btl-helpfulness_0',
     # 'hht-btl-honesty': f'{root}/hht-btl-honesty_0',
     # 'hht-btl-truthfulness': f'{root}/hht-btl-truthfulness_0',
@@ -78,7 +78,7 @@ for model_name, model_path in save_dict.items():
     cfg.data.batch_size = 1
     cfg.data.max_num_context = 10
     cfg.data.num_targets= 13
-    test_data_loader = setup_dataloaders(cfg.data, splits=['test'])['test']
+    test_data_loader = setup_dataloaders(cfg.data, splits=['val'])['val']
     
     loss_func = DPOLoss(cfg.loss)
     
