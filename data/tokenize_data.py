@@ -26,13 +26,14 @@ def _get_chat_text(prompt, response):
     if hasattr(tokenizer, 'apply_chat_template'):
         # Use built-in chat template if available
         messages = [
-            {"role": "system", "content": system_prompt},
+            #{"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
             {"role": "assistant", "content": response}
         ]
         return tokenizer.apply_chat_template(messages, tokenize=False)
     else:
         # Fallback to manual template
+        print("Fallback to manual template")
         return bos_token + template.format(prompt=prompt, response=response)
 
 def _tokenize(prompt, response):

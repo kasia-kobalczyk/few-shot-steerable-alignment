@@ -1,8 +1,8 @@
 import os
 import sys
 sys.path.append('../')
+from pathlib import Path
 from data.utils import setup_dataloaders, collect_pairs_choices
-from eval.utils import load_model
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,22 +11,54 @@ import seaborn as sns
 from tqdm import tqdm
 from src.loss import DPOLoss
 import pandas as pd
+from src.models import LLMPolicy
+from omegaconf import OmegaConf
+
+def load_model_from_save(save_dir: str, model_class, device: torch.device):
+    """Instantiate *model_class* from ``save_dir`` and load its *best* checkpoint."""
+    cfg_path = Path(save_dir) / "config.yaml"
+    ckpt_path = Path(save_dir) / "model_best.pt"
+
+    if not cfg_path.exists():
+        raise FileNotFoundError(cfg_path)
+    if not ckpt_path.exists():
+        raise FileNotFoundError(ckpt_path)
+
+    cfg = OmegaConf.load(str(cfg_path))
+    model_cfg = cfg.model
+
+    model = model_class(model_cfg)
+    state_dict = torch.load(str(ckpt_path), map_location=device)
+    
+    # Print state dict keys that will be loaded
+    print("\nState dict keys to load:")
+    for key in state_dict.keys():
+        print(f"  {key}")
+        
+    # Load state dict and get results
+    load_result = model.load_state_dict(state_dict, strict=False)
+    
+    model.to(device)
+    model.eval()
+    return cfg, model
+
+
 
 device='cuda:0'
 
-root = '../saves/dpo-ultrafeedback/'
+root = '/mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback'
 
 # Load the models
 save_dict = {
-    'hh-btl-mixed' : f'{root}/hh-btl-mixed_0',
-    'hh-btl-honesty': f'{root}/hh-btl-honesty_0',
-    'hh-btl-helpfulness': f'{root}/hh-btl-helpfulness_0',
-    'hh-nppl-mixed' : f'{root}/hh-nppl-mixed_0',
-    'hht-btl-helpfulness': f'{root}/hht-btl-helpfulness_0',
-    'hht-btl-honesty': f'{root}/hht-btl-honesty_0',
-    'hht-btl-truthfulness': f'{root}/hht-btl-truthfulness_0',
-    'hht-btl-mixed_0': f'{root}/hht-btl-mixed_0',
-    'hht-nppl-mixed_0': f'{root}/hht-nppl-mixed_0',
+    #'hh-btl-mixed' : f'{root}/hh-dpo-btl-mixed_1',
+    #'hh-btl-honesty': f'{root}/hh-dpo-btl-honesty_0',
+    #'hh-btl-helpfulness': f'{root}/hh-dpo-btl-helpfulness_0',
+    'hh-nppl-mixed-new_1' : f'{root}//hh-dpo-nppl-mixed-gemma_3',
+    # 'hht-btl-helpfulness': f'{root}/hht-btl-helpfulness_0',
+    # 'hht-btl-honesty': f'{root}/hht-btl-honesty_0',
+    # 'hht-btl-truthfulness': f'{root}/hht-btl-truthfulness_0',
+    # 'hht-btl-mixed_0': f'{root}/hht-btl-mixed_0',
+    # 'hht-nppl-mixed_0': f'{root}/hht-nppl-mixed_0',
 }
 
 num_context_ls = [0, 1, 3, 5, 10]
@@ -41,7 +73,7 @@ for model_name, _ in save_dict.items():
             eval_dict[model_name][metric][num_context] = []
 
 for model_name, model_path in save_dict.items():
-    model, cfg = load_model(model_path, load_it='best', device=device)
+    cfg, model = load_model_from_save(model_path, LLMPolicy, device)
     
     cfg.data.batch_size = 1
     cfg.data.max_num_context = 10
@@ -99,6 +131,9 @@ for model_name, model_path in save_dict.items():
             eval_dict[model_name]['accuracy'][num_context].append(acc)
             eval_dict[model_name]['unseen_accuracy'][num_context].append(unseen_acc)
             eval_dict[model_name]['label'][num_context].append(batch['labels_T'])
+            
+        if j > 500:
+            break
             
         
 num_context = 0

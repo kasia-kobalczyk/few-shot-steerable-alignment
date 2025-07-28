@@ -144,13 +144,13 @@ python eval_uf_dpo.py
 ```bash
 # Simple (un‑conditional) policy model on helpfulness
 python src/generate.py \
-    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-btl-helpfulness_0 \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-btl-mixed_1 \
     --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_1 \
     --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_1 \
     --split test \
     --labels helpfulness \
-    --out_dir ./generations/helpfulness/simple_gold/ \
-    --device 3
+    --out_dir ./generations/helpfulness/simple/ \
+    --device 0
 ```
 
 ```bash
@@ -168,25 +168,25 @@ python src/generate.py \
 ```bash
 # Conditional policy model (few‑shot conditioning) on helpfulness
 python src/generate.py \
-    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-new_1 \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-gemma_3 \
     --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_1 \
     --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_1 \
     --split test \
     --labels helpfulness \
-    --out_dir ./generations/helpfulness/conditional/ \
+    --out_dir ./generations/helpfulness/conditional_gemma/ \
     --context_lengths 0 1 3 5 10 \
-    --device 1
+    --device 0
 ```
 
 ```bash
 # Conditional policy model (few‑shot conditioning) on honesty
 python src/generate.py \
-    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-new_1 \
+    --policy_save_dir /mnt/pdata/caf83/few-shot-alignment/saves/dpo-ultrafeedback/hh-dpo-nppl-mixed-gemma_3 \
     --help_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-helpfulness_1 \
     --honesty_reward_dir /mnt/pdata/caf83/few-shot-alignment/saves/reward-models-ultrafeedback/hh-btl-honesty_1 \
     --split test \
     --labels honesty \
-    --out_dir ./generations/honesty/conditional/ \
+    --out_dir ./generations/honesty/conditional_gemma/ \
     --context_lengths 0 1 3 5 10 \
     --device 3
 ```

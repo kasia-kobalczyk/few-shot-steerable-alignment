@@ -115,11 +115,12 @@ def build_chat_prompt(tokenizer, prompt_text: str, system_prompt: str = "You are
     """Return a *text* (not tokenised) prompt using the correct chat template."""
     if hasattr(tokenizer, "apply_chat_template"):
         messages = [
-            {"role": "system", "content": system_prompt},
+            #{"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt_text},
         ]
         return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
     else:
+        print("Using fallback chat template.d")
         bos = tokenizer.bos_token or ""
         return f"{bos}Human: {prompt_text}\n\nAssistant:"
         
@@ -136,6 +137,8 @@ def clean_prompt(text: str) -> str:
     # Find the content between 'user\n' and '\nassistant\n'
     if '\nuser\n' in text:
         content = text.split('\nuser\n')[1].split('\nassistant\n')[0]
+    elif 'user\n' in text:
+        content = text.split('user\n')[1].split('\nmodel\n')[0]
     else:
         # Fallback for other formats
         content = text.split('Human: ')[1].split('\n\nAssistant:')[0]
@@ -252,11 +255,22 @@ def generate_conditional(
         # As above, strip the prompt.
         cleaned = []
         for prompt_text, full in zip(prompts, decoded):
-            anchor = "\nassistant\n"
-            idx = full.rfind(anchor)
-            if idx != -1:
-                cleaned.append(full[idx + len(anchor):].strip())
+            # Try different possible anchors
+            assistant_anchor = "\nassistant\n"
+            model_anchor = "\nmodel\n"
+            
+            # Try to find either anchor
+            assistant_idx = full.rfind(assistant_anchor)
+            model_idx = full.rfind(model_anchor)
+            
+            if assistant_idx != -1:
+                # Found assistant anchor
+                cleaned.append(full[assistant_idx + len(assistant_anchor):].strip())
+            elif model_idx != -1:
+                # Found model anchor
+                cleaned.append(full[model_idx + len(model_anchor):].strip())
             else:
+                # Fallback to splitting by prompt
                 cleaned.append(full.split(prompt_text, 1)[-1].strip())
         generations[ctx_len] = cleaned
     return generations
@@ -351,8 +365,8 @@ def main():  # noqa: C901 – a bit long but still readable
     # Load data (uses *policy* cfg to stay in sync with tokenisation etc.)
     # ---------------------------------------------------------------------
     policy_cfg_full.data.labels = [args.labels]
-    policy_cfg_full.data.batch_size = 2
-    policy_cfg_full.data.num_targets = 11
+    policy_cfg_full.data.batch_size = 1
+    policy_cfg_full.data.num_targets = 15
     dataloaders = setup_dataloaders(policy_cfg_full.data, splits=[args.split])  # type: ignore[attr-defined]
     dataloader = dataloaders[args.split]
 
@@ -443,14 +457,14 @@ def main():  # noqa: C901 – a bit long but still readable
                     help_scores = help_out["rewards"].squeeze().mean(dim=-1).tolist()
                     honesty_scores = honesty_out["rewards"].squeeze().mean(dim=-1).tolist()
 
-                for prompt_text, resp, hs, oscore in zip(
+                for prompt_text, resp, help, honest in zip(
                     prompts, resp_list, help_scores, honesty_scores  # type: ignore[index]
                 ):
                     record = {
                         "id": sample_id,
                         "context_len": ctx_len,
-                        "helpfulness_score": hs,
-                        "honesty_score": oscore,
+                        "helpfulness_score": help,
+                        "honesty_score": honest,
                         "prompt": prompt_text,
                         "response": resp,
                     }
@@ -461,7 +475,7 @@ def main():  # noqa: C901 – a bit long but still readable
             sample_id_2 = sample_id
                     
             if sample_id > 500:  # Limit the number of samples to avoid too large output files
-                print(f"Reached sample limit of 10000, stopping generation.")
+                print(f"Reached sample limit of 500, stopping generation.")
                 break
         
 

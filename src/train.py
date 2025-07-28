@@ -189,6 +189,23 @@ class Trainer:
                                 f"{self.save_dir}/optim_best.pt",
                             )
                             print(f"Best model saved at iteration {self.last_save_it + it}")
+                            
+
+                        if self.cfg.model.model_type == 'policy':
+                            # Save only LoRA parameters for policy models
+                            state_dict_save = {}
+                            for name, param in self.model.named_parameters():
+                                if 'lora_' in name or 'film' in name:  # Only save LoRA and FiLMparameters
+                                    state_dict_save[name] = param
+                        else:
+                            state_dict_save = self.model.state_dict()
+
+                        torch.save(state_dict_save, f"{self.save_dir}/checkpoint-{self.last_save_it + it}.pt")
+                        torch.save(
+                            self.optimizer.state_dict(),
+                            f"{self.save_dir}/optim-checkpoint-{self.last_save_it + it}.pt",
+                        )
+                        print(f"saved at checkpoint {self.last_save_it + it}")
                 it += 1
 
         return min_eval_loss

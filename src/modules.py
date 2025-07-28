@@ -154,7 +154,6 @@ class ConditionalLLM(nn.Module):
     # forward / generate
     # --------------------------------------------------------
     def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, latent_variable: Optional[torch.Tensor] = None, **kwargs):
-        print("Forward method called")
         return self.base(input_ids=input_ids, attention_mask=attention_mask, latent=latent_variable, **kwargs)
 
     @torch.no_grad()
